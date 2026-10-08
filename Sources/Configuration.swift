@@ -129,16 +129,55 @@ struct DeckConfiguration: Codable, Equatable {
     }
 }
 
+struct ConfigurationLoad {
+    let configuration: DeckConfiguration
+    // Message à montrer à l'utilisateur (par exemple après une restauration), sinon nil.
+    let notice: String?
+}
+
 struct ConfigurationStore {
     let directory: URL
     var file: URL { directory.appendingPathComponent("raccourcis.json") }
     var backup: URL { directory.appendingPathComponent("raccourcis.previous.json") }
+
+    private func read(_ url: URL) throws -> DeckConfiguration {
+        let data = try Data(contentsOf: url)
+        let value: DeckConfiguration
+        do { value = try JSONDecoder().decode(DeckConfiguration.self, from: data) }
+        catch { throw NSError(domain: "Deck", code: 1, userInfo: [NSLocalizedDescriptionKey: "Le fichier de raccourcis est invalide. Il a été conservé."]) }
+        guard value.isValid else { throw NSError(domain: "Deck", code: 1, userInfo: [NSLocalizedDescriptionKey: "Le fichier de raccourcis est invalide. Il a été conservé."]) }
+        return value
+    }
+
     func load() throws -> DeckConfiguration {
         guard FileManager.default.fileExists(atPath: file.path) else { return DeckConfiguration() }
-        let value = try JSONDecoder().decode(DeckConfiguration.self, from: Data(contentsOf: file))
-        guard value.isValid else { throw NSError(domain: "Deck", code: 1, userInfo: [NSLocalizedDescriptionKey: "Le fichier de raccourcis est invalide. Il a été conservé."]) }
+        let value = try read(file)
         if value != value.migrated { try save(value.migrated) }
         return value.migrated
+    }
+
+    // Comme load(), mais si le fichier principal est illisible, reprend la sauvegarde précédente.
+    // Le fichier abîmé n'est jamais supprimé ni écrasé : il est d'abord copié à côté.
+    func loadRecovering() throws -> ConfigurationLoad {
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            return ConfigurationLoad(configuration: DeckConfiguration(), notice: nil)
+        }
+        let value: DeckConfiguration
+        do { value = try read(file) }
+        catch {
+            guard FileManager.default.fileExists(atPath: backup.path), let previous = try? read(backup) else {
+                throw NSError(domain: "Deck", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                    "Le fichier de réglages est illisible et aucune sauvegarde utilisable n’a été trouvée. Il n’a pas été modifié (dossier : \(directory.path)). L’application reste en pause : importe une configuration pour repartir."])
+            }
+            let preserved = directory.appendingPathComponent("raccourcis.corrupt-\(Int(Date().timeIntervalSince1970)).json")
+            try FileManager.default.copyItem(at: file, to: preserved)
+            let recovered = previous.migrated
+            try save(recovered)
+            return ConfigurationLoad(configuration: recovered, notice:
+                "Le fichier de réglages était abîmé : la sauvegarde précédente a été restaurée (tes toutes dernières modifications peuvent manquer). L’ancien fichier est gardé sous le nom « \(preserved.lastPathComponent) » dans le dossier : \(directory.path)")
+        }
+        if value != value.migrated { try save(value.migrated) }
+        return ConfigurationLoad(configuration: value.migrated, notice: nil)
     }
     func save(_ configuration: DeckConfiguration) throws {
         guard configuration.isValid else { throw NSError(domain: "Deck", code: 2, userInfo: [NSLocalizedDescriptionKey: "Configuration invalide."]) }

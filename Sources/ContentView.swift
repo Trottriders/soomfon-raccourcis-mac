@@ -82,6 +82,14 @@ struct DeckView: View {
                     Button("Réparer la connexion au boîtier") { model.reconnectDeck() }
                 } label: { Image(systemName: "ellipsis.circle").font(.title3) }.menuStyle(.borderlessButton).frame(width: 26)
             }
+            if let notice = model.notice {
+                HStack(alignment: .top, spacing: 12) {
+                    Text(notice).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                    Spacer()
+                    // Tant que les réglages n'ont pas été réparés (import), le message reste affiché.
+                    if !model.hasLoadError { Button("OK") { model.notice = nil }.font(.caption) }
+                }.padding(12).background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+            }
             if let error = model.error { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(2).textSelection(.enabled) }
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(red: 0.075, green: 0.09, blue: 0.115))
             .preferredColorScheme(.dark).tint(accent)

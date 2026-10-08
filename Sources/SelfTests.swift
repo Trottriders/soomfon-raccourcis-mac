@@ -91,6 +91,26 @@ func runSelfTests() throws {
     try Data("broken".utf8).write(to: store.file)
     do { _ = try store.load(); check(false, "corrupt file rejected") } catch { }
     check((try? String(contentsOf: store.file, encoding: .utf8)) == "broken", "corrupt file preserved")
+    // Fichier principal abîmé mais sauvegarde valide : reprise automatique, ancien fichier gardé à part.
+    let recoveryStore = ConfigurationStore(directory: temporary.appendingPathComponent("recovery"))
+    var recoverable = DeckConfiguration(); recoverable.keys[2] = copy
+    try recoveryStore.save(recoverable)
+    recoverable.keys[2] = KeyAssignment(); recoverable.keys[5] = copy
+    try recoveryStore.save(recoverable)
+    try Data("broken".utf8).write(to: recoveryStore.file)
+    let recovery = try recoveryStore.loadRecovering()
+    check(recovery.configuration.keys[2] == copy && recovery.notice != nil, "damaged settings fall back to the previous backup with a notice")
+    let keptAside = try FileManager.default.contentsOfDirectory(atPath: recoveryStore.directory.path).filter { $0.hasPrefix("raccourcis.corrupt-") }
+    check(keptAside.count == 1 && (try? String(contentsOf: recoveryStore.directory.appendingPathComponent(keptAside[0]), encoding: .utf8)) == "broken",
+          "damaged settings file is kept aside and never deleted")
+    check((try? recoveryStore.load())?.keys[2] == copy, "restored settings are written back as a valid file")
+    let healthy = try recoveryStore.loadRecovering()
+    check(healthy.notice == nil && healthy.configuration == recovery.configuration, "a healthy settings file loads without any notice")
+    let lonelyStore = ConfigurationStore(directory: temporary.appendingPathComponent("lonely"))
+    try FileManager.default.createDirectory(at: lonelyStore.directory, withIntermediateDirectories: true)
+    try Data("broken".utf8).write(to: lonelyStore.file)
+    do { _ = try lonelyStore.loadRecovering(); check(false, "damaged settings without backup rejected") } catch { }
+    check((try? String(contentsOf: lonelyStore.file, encoding: .utf8)) == "broken", "damaged settings without backup are left untouched")
     var invalid = config; invalid.keys.removeLast()
     check(!invalid.isValid, "reject missing assignments")
     invalid = config; invalid.brightness = 101
@@ -320,7 +340,7 @@ func runSelfTests() throws {
             board.writeObjects([item])
         }
         let inserter = TextInserter()
-        var complete = false, failed = false, pasted = false
+        var complete = false, failed = false, pasted = false, hidden = false
         func waitForCompletion() {
             let deadline = Date().addingTimeInterval(2)
             while !complete && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
@@ -330,6 +350,7 @@ func runSelfTests() throws {
         Task { @MainActor in
             do { try await inserter.insert(insertedText, pasteboard: board) {
                 pasted = board.string(forType: .string) == insertedText && board.data(forType: .rtf) == nil
+                hidden = board.types?.contains(TextInsertion.transientType) == true && board.types?.contains(TextInsertion.concealedType) == true
                 return true
             } } catch { failed = true }
             complete = true
@@ -337,6 +358,8 @@ func runSelfTests() throws {
         waitForCompletion()
         check(pasted && !failed && !inserter.isInserting && board.string(forType: .string) == oldText && board.data(forType: .rtf) == rich,
               "paste receives exact plain text then restores original text and rich representations")
+        check(hidden && board.types?.contains(TextInsertion.concealedType) != true,
+              "temporary paste is marked transient and concealed for clipboard managers, and the marks are gone after restore")
         complete = false
         Task { @MainActor in
             do { try await inserter.insert(insertedText, pasteboard: board) {

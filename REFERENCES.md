@@ -25,3 +25,6 @@ Les échanges natifs macOS excluent l’octet d’identifiant de rapport ajouté
 - [Écrans en veille](https://developer.apple.com/documentation/appkit/nsworkspace/screensdidsleepnotification)
   et [écrans réveillés](https://developer.apple.com/documentation/appkit/nsworkspace/screensdidwakenotification) :
   notifications reçues depuis le centre de notifications de NSWorkspace, distinctes du sommeil du Mac.
+- [Types de presse-papiers de la communauté](http://nspasteboard.org/) : `org.nspasteboard.TransientType`
+  et `org.nspasteboard.ConcealedType`, que les gestionnaires de presse-papiers respectent pour ne pas
+  enregistrer un contenu provisoire ou confidentiel.

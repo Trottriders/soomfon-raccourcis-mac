@@ -44,6 +44,9 @@ import UniformTypeIdentifiers
     @Published var pressed: Int? = nil
     @Published var activity = "Appuie sur une touche du boîtier pour la vérifier."
     @Published var error: String? = nil
+    // Message de démarrage qui doit rester visible (réglages restaurés ou illisibles) ;
+    // contrairement à `error`, il n'est pas effacé par le prochain affichage sur le boîtier.
+    @Published var notice: String? = nil
     let dashboardState = DashboardState()
     var dashboardPreviews: [Data] { get { dashboardState.previews } set { dashboardState.previews = newValue } }
     @Published var cityQuery = ""
@@ -65,7 +68,9 @@ import UniformTypeIdentifiers
     private var mouseMonitors: [Any] = []
     private var trustTimer: Timer?
     private var renderTask: DispatchWorkItem?
-    private var hasLoadError = false
+    private(set) var hasLoadError = false
+    private var saveTask: DispatchWorkItem?
+    private var savePending = false
     private var wakeObserver: NSObjectProtocol?
     private var sleepObserver: NSObjectProtocol?
     private var screensWakeObserver: NSObjectProtocol?
@@ -84,8 +89,11 @@ import UniformTypeIdentifiers
 
     init(directory: URL) {
         store = ConfigurationStore(directory: directory)
-        do { configuration = try store.load() }
-        catch { self.error = error.localizedDescription; hasLoadError = true; paused = true }
+        do {
+            let loaded = try store.loadRecovering()
+            configuration = loaded.configuration
+            notice = loaded.notice
+        } catch { notice = error.localizedDescription; hasLoadError = true; paused = true }
         usb.onStatus = { [weak self] connected, status in
             if self?.connected != connected { self?.connected = connected }; if self?.status != status { self?.status = status }
             if !connected { self?.cancelActions(); self?.down.removeAll(); self?.pressed = nil; self?.lastDashboardImages = [:]; self?.idle = IdleState(lastInteraction: Date()); self?.screensaverActive = false; self?.lastIdleTick = nil }
@@ -195,9 +203,25 @@ import UniformTypeIdentifiers
 
     func save() {
         guard !hasLoadError else { return }
+        saveTask?.cancel(); saveTask = nil; savePending = false
         do { try store.save(configuration); error = nil; updateKeyPreviews(); scheduleRender(); refreshWeather() }
         catch { self.error = "Enregistrement impossible : \(error.localizedDescription)" }
     }
+
+    // Pour la saisie de texte : l'aperçu suit chaque frappe, mais le fichier n'est écrit
+    // qu'une demi-seconde après la dernière, au lieu d'être réécrit à chaque lettre.
+    func saveSoon() {
+        guard !hasLoadError else { return }
+        updateKeyPreviews(); scheduleRender()
+        savePending = true
+        saveTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in self?.save() }
+        saveTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: task)
+    }
+
+    // À appeler avant de fermer la fenêtre ou de quitter : écrit tout de suite une saisie en attente.
+    func flushPendingSave() { if savePending { save() } }
 
     func preset(_ preset: Preset) {
         cancelActions(); recording = false
@@ -228,11 +252,11 @@ import UniformTypeIdentifiers
 
     func removeIcon() { currentKeys[selected].iconPNG = nil; save() }
 
-    func changeDashboard(_ change: (inout DashboardConfiguration) -> Void) {
+    func changeDashboard(deferSave: Bool = false, _ change: (inout DashboardConfiguration) -> Void) {
         var settings = configuration.effectiveDashboard
         change(&settings)
         configuration.dashboard = settings
-        save()
+        if deferSave { saveSoon() } else { save() }
         updateDashboard()
     }
 
@@ -250,7 +274,7 @@ import UniformTypeIdentifiers
 
     func changeAppearance(_ index: Int, _ change: (inout IconAppearance) -> Void) {
         var appearance = currentKeys[index].effectiveAppearance
-        change(&appearance); currentKeys[index].appearance = appearance; save()
+        change(&appearance); currentKeys[index].appearance = appearance; saveSoon()
     }
 
     func changeScreensaver(_ change: (inout ScreensaverConfiguration) -> Void) {
@@ -461,9 +485,10 @@ import UniformTypeIdentifiers
         recording = true
     }
 
-    func updateSelected(_ change: (inout KeyAssignment) -> Void) {
+    func updateSelected(deferSave: Bool = false, _ change: (inout KeyAssignment) -> Void) {
         cancelActions()
-        var key = selectedKey; change(&key); currentKeys[selected] = key; save()
+        var key = selectedKey; change(&key); currentKeys[selected] = key
+        if deferSave { saveSoon() } else { save() }
     }
 
     func changeAction(_ kind: KeyActionKind) {
@@ -508,7 +533,7 @@ import UniformTypeIdentifiers
         guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if activePageID == homePageID { configuration.homeName = value }
         else if let index = configuration.pages?.firstIndex(where: { $0.id == activePageID }) { configuration.pages![index].name = value }
-        save()
+        saveSoon()
     }
 
     func addPage() {
@@ -584,9 +609,9 @@ import UniformTypeIdentifiers
         }
     }
 
-    func updateMacroStep(_ id: UUID, _ change: (inout MacroStep) -> Void) {
+    func updateMacroStep(_ id: UUID, deferSave: Bool = false, _ change: (inout MacroStep) -> Void) {
         guard let index = selectedKey.macro?.firstIndex(where: { $0.id == id }) else { return }
-        updateSelected { change(&$0.macro![index]) }
+        updateSelected(deferSave: deferSave) { change(&$0.macro![index]) }
     }
 
     func moveMacroStep(_ id: UUID, offset: Int) {
@@ -854,12 +879,17 @@ import UniformTypeIdentifiers
                 try FileManager.default.copyItem(at: store.file, to: preserved)
             }
             try store.save(value)
-            cancelActions(); configuration = value; activePageID = homePageID; updateKeyPreviews(); idle = IdleState(lastInteraction: Date()); screensaverActive = false; lastIdleTick = nil; hasLoadError = false; error = nil; recording = false
+            saveTask?.cancel(); saveTask = nil; savePending = false
+            // Un chargement raté avait mis l'application en pause : l'import la répare, on la relance.
+            let wasBlocked = hasLoadError
+            cancelActions(); configuration = value; activePageID = homePageID; updateKeyPreviews(); idle = IdleState(lastInteraction: Date()); screensaverActive = false; lastIdleTick = nil; hasLoadError = false; error = nil; notice = nil; recording = false
+            if wasBlocked { paused = false }
             scheduleRender()
         } catch { self.error = error.localizedDescription }
     }
 
     func stop() {
+        flushPendingSave()
         cancelActions()
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }; mouseMonitors.removeAll()

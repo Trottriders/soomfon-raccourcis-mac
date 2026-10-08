@@ -92,7 +92,7 @@ struct MacroEditorView: View {
                     switch step.kind {
                     case .shortcut: ShortcutControls(model: model, step: step)
                     case .text:
-                        TextInsertionView(text: Binding(get: { step.text ?? "" }, set: { value in model.updateMacroStep(step.id) { $0.text = TextInsertion.draft(value) } }))
+                        TextInsertionView(text: Binding(get: { step.text ?? "" }, set: { value in model.updateMacroStep(step.id, deferSave: true) { $0.text = TextInsertion.draft(value) } }))
                     case .wait:
                         HStack {
                             TextField("Durée", value: Binding(get: { step.seconds }, set: { value in
@@ -104,7 +104,7 @@ struct MacroEditorView: View {
                             }), in: 0...60, step: 0.1).labelsHidden()
                         }.font(.caption)
                     case .website:
-                        WebsiteAddressView(address: Binding(get: { step.websiteAddress ?? "" }, set: { value in model.updateMacroStep(step.id) { $0.websiteAddress = String(value.prefix(4096)) } }))
+                        WebsiteAddressView(address: Binding(get: { step.websiteAddress ?? "" }, set: { value in model.updateMacroStep(step.id, deferSave: true) { $0.websiteAddress = String(value.prefix(4096)) } }))
                     case .application:
                         Text(step.label).font(.caption).lineLimit(2)
                         Button("Choisir l’application…") { model.chooseApplication(step: step.id) }
@@ -127,7 +127,7 @@ struct KeyEditorView: View {
                 Text("Touche \(model.selected + 1)").font(.title3).fontWeight(.semibold)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Titre").font(.caption).foregroundStyle(.secondary)
-                    TextField("Ex. Copier", text: Binding(get: { key.title }, set: { value in model.updateSelected { $0.title = String(value.prefix(80)) } }))
+                    TextField("Ex. Copier", text: Binding(get: { key.title }, set: { value in model.updateSelected(deferSave: true) { $0.title = String(value.prefix(80)) } }))
                         .textFieldStyle(.roundedBorder)
                     Toggle("Afficher le titre", isOn: Binding(get: { key.showsTitle }, set: { value in model.updateSelected { $0.showTitle = value } }))
                         .font(.caption)
@@ -146,13 +146,13 @@ struct KeyEditorView: View {
                     if key.effectivePressMode == .hold { Text("Le raccourci reste appuyé sous ton doigt, puis se relâche quand tu enlèves le doigt.").font(.caption).foregroundStyle(.secondary) }
                 case .macro: MacroEditorView(model: model)
                 case .text:
-                    TextInsertionView(text: Binding(get: { key.text ?? "" }, set: { value in model.updateSelected { $0.text = TextInsertion.draft(value) } }))
+                    TextInsertionView(text: Binding(get: { key.text ?? "" }, set: { value in model.updateSelected(deferSave: true) { $0.text = TextInsertion.draft(value) } }))
                 case .application:
                     Text(key.applicationPath.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "Aucune application choisie").font(.caption)
                     Button("Choisir l’application…") { model.chooseApplication() }
                     LaunchPageView(model: model)
                 case .website:
-                    WebsiteAddressView(address: Binding(get: { key.websiteAddress ?? "" }, set: { value in model.updateSelected { $0.websiteAddress = String(value.prefix(4096)) } }))
+                    WebsiteAddressView(address: Binding(get: { key.websiteAddress ?? "" }, set: { value in model.updateSelected(deferSave: true) { $0.websiteAddress = String(value.prefix(4096)) } }))
                     LaunchPageView(model: model)
                 case .screenCapture:
                     Picker("Capturer", selection: Binding(get: { key.effectiveCaptureMode }, set: { value in model.updateSelected { $0.captureMode = value } })) {

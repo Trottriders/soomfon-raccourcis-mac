@@ -32,6 +32,19 @@ import SwiftUI
         item.menu = menu
         let appMenu = NSMenu()
         let root = NSMenuItem(); appMenu.addItem(root); root.submenu = menu.copy() as? NSMenu
+        // Sans menu Édition, ⌘C ⌘V ⌘X ⌘A ⌘Z ne fonctionnent pas dans les champs de texte.
+        // Les actions n'ont pas de cible : elles vont au champ actif (chaîne des répondeurs).
+        let edit = NSMenu(title: "Édition")
+        edit.addItem(withTitle: "Annuler", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Rétablir", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Couper", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copier", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Coller", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Tout sélectionner", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editRoot = NSMenuItem(title: "Édition", action: nil, keyEquivalent: ""); editRoot.submenu = edit
+        appMenu.addItem(editRoot)
         NSApplication.shared.mainMenu = appMenu
     }
     @objc func showWindow() { window.makeKeyAndOrderFront(nil); NSApplication.shared.activate(ignoringOtherApps: true) }
@@ -40,7 +53,7 @@ import SwiftUI
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(); return true }
     func applicationWillTerminate(_ notification: Notification) { model.stop() }
-    func windowWillClose(_ notification: Notification) { model.recording = false }
+    func windowWillClose(_ notification: Notification) { model.flushPendingSave(); model.recording = false }
 }
 
 if CommandLine.arguments.contains("--self-test") {

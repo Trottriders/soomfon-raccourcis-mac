@@ -57,10 +57,19 @@ Les réglages personnels sont conservés sur le Mac dans
 `~/Library/Application Support/Soomfon Raccourcis/raccourcis.json`, avec une sauvegarde précédente.
 Ils ne font pas partie de ce dépôt. Les icônes choisies sont intégrées à ces réglages.
 Le menu de l’application permet leur export et leur import.
+Pendant la saisie d’un titre, d’un texte ou d’une adresse, le fichier est écrit une demi-seconde
+après la dernière frappe, et tout de suite à la fermeture de la fenêtre ou en quittant.
+Si le fichier principal est abîmé au lancement, la sauvegarde précédente est restaurée
+automatiquement : l’ancien fichier est gardé à côté (`raccourcis.corrupt-….json`) et un message
+l’indique dans la fenêtre. Sans sauvegarde utilisable, rien n’est modifié, l’application reste en
+pause et l’import d’une configuration la répare.
 
 L’insertion de texte utilise un collage en texte brut ; le presse-papiers précédent est
 restauré après une demi-seconde, sauf si un autre contenu a été copié entre-temps.
 Un champ acceptant le collage doit être actif.
+Le texte est marqué comme temporaire et confidentiel pour les gestionnaires de presse-papiers qui
+respectent cette convention. Les textes enregistrés restent en clair dans le fichier de réglages et
+dans les exports : n’y mets pas de mot de passe.
 La météo ne nécessite pas de clé et utilise uniquement la ville choisie.
 Les touches sans action sont noires ; le protocole connu ne permet pas l’extinction
 individuelle de leur rétroéclairage.

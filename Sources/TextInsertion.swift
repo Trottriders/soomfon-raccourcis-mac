@@ -8,6 +8,10 @@ enum TextInsertion {
     static func draft(_ value: String) -> String {
         String(value.replacingOccurrences(of: "\0", with: "").prefix(maximumLength))
     }
+    // Convention nspasteboard.org : les gestionnaires de presse-papiers qui la respectent
+    // n'enregistrent pas un contenu portant ces marques (le texte reste collé normalement).
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
 }
 
 // Keep every representation (including images and rich text). Restore only if
@@ -50,6 +54,9 @@ enum TextInsertion {
         defer { isInserting = false }
         pasteboard.clearContents()
         let written = pasteboard.setString(text, forType: .string)
+        // Ce texte est provisoire (restauré dans une demi-seconde) et peut être confidentiel.
+        pasteboard.setString("", forType: TextInsertion.transientType)
+        pasteboard.setString("", forType: TextInsertion.concealedType)
         let changeCount = pasteboard.changeCount
         guard written, paste() else {
             original.restore(pasteboard, ifUnchangedSince: changeCount)

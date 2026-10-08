@@ -39,7 +39,7 @@ struct DashboardSettingsView: View {
                                 })).accessibilityLabel("Afficher le titre de la zone \(positions[index].lowercased())")
                                 if settings.slots[index].showsTitle {
                                     TextField("Titre automatique", text: Binding(get: { settings.slots[index].title ?? "" }, set: { value in
-                                        model.changeDashboard { $0.slots[index].title = String(value.prefix(80)) }
+                                        model.changeDashboard(deferSave: true) { $0.slots[index].title = String(value.prefix(80)) }
                                     })).textFieldStyle(.roundedBorder).frame(width: 190)
                                         .accessibilityLabel("Titre de la zone \(positions[index].lowercased())")
                                 }
