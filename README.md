@@ -1,5 +1,18 @@
 # Soomfon Raccourcis pour Mac
 
+
+## Pourquoi ce projet ?
+
+Je ne suis pas développeur. J’ai créé cette application pour mon usage personnel,
+parce que le logiciel du constructeur me posait régulièrement des problèmes sur
+mon Mac. Je voulais pouvoir utiliser mon boîtier Soomfon avec les raccourcis et les
+fonctions dont j’avais besoin au quotidien.
+
+Si ce projet peut servir à d’autres personnes, tant mieux ! Les idées, les
+corrections et les améliorations sont les bienvenues. Vous pouvez signaler un
+problème dans les Issues ou proposer une modification avec une pull request.
+Toute aide pour faire évoluer l’application est appréciée.
+
 Application native pour le boîtier Soomfon XF-CN001 (15 touches, USB `1500:3003`).
 Mac Apple Silicon, macOS 14 ou ultérieur. Version 0.9.6.
 
