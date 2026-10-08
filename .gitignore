@@ -1,0 +1,9 @@
+/output/
+.DS_Store
+.env
+.env.*
+*.log
+*.zip
+*.bak
+/raccourcis*.json
+/Soomfon Data/
